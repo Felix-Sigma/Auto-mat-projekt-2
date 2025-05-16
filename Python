@@ -1,0 +1,60 @@
+import cv2
+import os
+import serial
+import time
+from deepface import DeepFace
+from datetime import datetime
+
+# Konfiguration
+SERIAL_PORT = 'COM3'  # Ändra till rätt port
+REFERENCE_FOLDER = "train_faces"  # Mapp med referensbilder på hunden
+MATNINGSTIDER = ["07:00", "12:00", "17:00"]
+matade_tidpunkter = set()
+
+# Starta serialport till Arduino
+arduino = serial.Serial(SERIAL_PORT, 9600)
+time.sleep(2)
+
+# Ladda referensbilder
+reference_images = []
+for filename in os.listdir(REFERENCE_FOLDER):
+    if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+        img = cv2.imread(os.path.join(REFERENCE_FOLDER, filename))
+        if img is not None:
+            reference_images.append(img)
+
+# Starta kamera
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Kunde inte öppna kameran.")
+    exit()
+
+print("System igång... Väntar på rätt hund och rätt tid...")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        continue
+
+    now = datetime.now()
+    aktuell_tid = now.strftime("%H:%M")
+
+    # Kontrollera tid: är det en tillåten matningstid?
+    if aktuell_tid in MATNINGSTIDER and aktuell_tid not in matade_tidpunkter:
+        for ref_img in reference_images:
+            try:
+                resultat = DeepFace.verify(frame, ref_img, model_name="SFace", enforce_detection=False)
+                if resultat["verified"]:
+                    print(f"Hunden igenkänd {aktuell_tid} – matar nu.")
+                    arduino.write(b'F')  # Skicka signal till Arduino
+                    matade_tidpunkter.add(aktuell_tid)
+                    break
+            except Exception as e:
+                print("Fel vid DeepFace:", e)
+
+    cv2.imshow("Auto-mat Kamera", frame)
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
