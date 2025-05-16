@@ -1,0 +1,23 @@
+#include <Stepper.h>
+
+const int stepsPerRevolution = 2048;
+Stepper myStepper(stepsPerRevolution, 8, 10, 9, 11);  // Justera pins efter din koppling
+
+void setup() {
+  Serial.begin(9600);
+  myStepper.setSpeed(15);  // RPM, anpassa vid behov
+}
+
+void loop() {
+  if (Serial.available()) {
+    char kommando = Serial.read();
+
+    if (kommando == 'F') {
+      // Kör 5 varv
+      for (int i = 0; i < 5; i++) {
+        myStepper.step(stepsPerRevolution);
+        delay(500);
+      }
+    }
+  }
+}
